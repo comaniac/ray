@@ -119,7 +119,7 @@ class Processor:
         will be added to the stage name to avoid conflicts.
 
         Args:
-            stage (StatefulStage): The stage to append.
+            stage: The stage to append.
         """
         stage_name = type(stage).__name__
 
@@ -146,7 +146,7 @@ class Processor:
         a ValueError will be raised.
 
         Args:
-            name (str): The stage name.
+            name: The stage name.
 
         Returns:
             The pipeline stage.
