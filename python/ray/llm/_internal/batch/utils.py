@@ -1,9 +1,6 @@
 """Utility functions for batch processing."""
 import logging
-import time
 from typing import Any, Union
-
-import ray
 
 AnyTokenizer = Union["PreTrainedTokenizer", "PreTrainedTokenizerFast", Any]
 
