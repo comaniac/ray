@@ -1,6 +1,6 @@
 """The HTTP request processor."""
 
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from ray.llm._internal.batch.processor.base import (
     Processor,
@@ -18,7 +18,7 @@ class HttpRequestProcessorConfig(ProcessorConfig):
     # The query header. Note that we will add
     # "Content-Type: application/json" to be the heahder for sure
     # because we only deal with requests body in JSON.
-    header: Optional[str] = None
+    headers: Optional[Dict[str, Any]] = None
     # Queries per second. If None, the query will be sent sequentially.
     qps: Optional[int] = None
 
@@ -40,7 +40,7 @@ def build_http_request_processor(
         HttpRequestStage(
             fn_constructor_kwargs=dict(
                 url=config.url,
-                additional_header=config.header,
+                additional_header=config.headers,
                 qps=config.qps,
             ),
             map_batches_kwargs=dict(
