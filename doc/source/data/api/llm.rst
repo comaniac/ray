@@ -1,7 +1,7 @@
 .. _llm-ref:
 
-LLM API
-=======
+Large Language Model (LLM) API
+==============================
 
 .. currentmodule:: ray.data.llm
 
