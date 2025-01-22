@@ -1,6 +1,4 @@
 import pytest
-import aiohttp
-import numpy as np
 from unittest.mock import AsyncMock, patch
 from ray.llm._internal.batch.stages.http_request_stage import HttpRequestUDF
 

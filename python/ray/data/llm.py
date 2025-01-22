@@ -8,7 +8,19 @@ from ray.util.annotations import PublicAPI
 
 @PublicAPI(stability="alpha")
 class ProcessorConfig(_ProcessorConfig):
-    """The base processor configuration."""
+    """The base processor configuration.
+
+    Args:
+        carry_over (bool): Whether to carry over input columns. You can set it to False
+            if you don't want input columns in the output dataset to reduce data
+            transfer volume and the size of the output dataset. Default to True.
+        batch_size (int): Large batch sizes are likely to saturate the compute resources
+            and could achieve higher throughput. On the other hand, small batch sizes
+            are more fault-tolerant and could reduce bubbles in the data pipeline.
+            You can tune the batch size to balance the throughput and fault-tolerance
+            based on your use case. Default to 64.
+
+    """
 
     pass
 
@@ -18,6 +30,25 @@ class Processor(_Processor):
     """A processor is composed of a preprocess stage, followed by one or more
     processing stages, and finally a postprocess stage. We use processor as a
     paradigm for processing data using LLMs.
+
+    Args:
+        config (ProcessorConfig): The processor config.
+        preprocess (Callable[[Dict[str, Any]], Dict[str, Any]]): A lambda function that
+            takes a row (dict) as input and returns a preprocessed row (dict). The output
+            row must contain the required fields for the following processing stages.
+        postprocess (Callable[[Dict[str, Any]], Dict[str, Any]]): A lambda function that
+            takes a row (dict) as input and returns a postprocessed row (dict).
+        accelerator_type (Optional[str]): The accelerator type. Default to None, meaning
+            that only the CPU will be used.
+        concurrency (int): The number of workers for data parallelism.
+
+    Attributes:
+        input_column: The internal used input column name (__inputs). Your input
+            dataset should not contain this column. If you want to use this column
+            in your input dataset, you have to derive and customize Processor.
+        output_column: The internal used output column name (__outputs). Your input
+            dataset should not contain this column. If you want to use this column
+            in your input dataset, you have to derive and customize Processor.
     """
 
     pass
@@ -28,17 +59,9 @@ def build_llm_processor(config: ProcessorConfig, **kwargs) -> Processor:
     """Build a LLM processor using the given config.
 
     Args:
-        config: The processor config.
-        **kwargs: Additional keyword arguments to pass to the processor builder.
-            - preprocess: The user defined function (UDF) to preprocess the input.
-                The UDF should take a row (dict) as input and return a preprocessed
-                row (dict). The output row must contain the required fields for the
-                following processing stages.
-            - postprocess: The user defined function (UDF) to postprocess the output.
-                The UDF should take a row (dict) as input and return a postprocessed
-                row (dict).
-            - accelerator_type: The accelerator type.
-            - concurrency: The number of concurrent core engines in this processor.
+        config (ProcessorConfig): The processor config.
+        **kwargs: Additional keyword arguments to pass to the processor.
+            See `Processor` for argument details.
 
     Returns:
         The built processor.
@@ -85,11 +108,11 @@ class HttpRequestProcessorConfig(_HttpRequestProcessorConfig):
                 print(row)
 
     Args:
-        url: The base URL to send the request to.
-        headers: The headers to send with the request. Note that the default
-            headers ("Content-Type": "application/json") is always added, so
+        url (str): The base URL to send the request to.
+        headers (Dict[str, str]): The headers to send with the request. Note that the
+            default headers ("Content-Type": "application/json") is always added, so
             you don't need to specify it here.
-        qps: The maximum number of requests per second to avoid rate limit.
+        qps (int): The maximum number of requests per second to avoid rate limit.
             If None, the request will be sent sequentially.
     """
 
