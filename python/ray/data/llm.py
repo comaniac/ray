@@ -11,10 +11,10 @@ class ProcessorConfig(_ProcessorConfig):
     """The base processor configuration.
 
     Args:
-        carry_over (bool): Whether to carry over input columns. You can set it to False
+        carry_over: Whether to carry over input columns. You can set it to False
             if you don't want input columns in the output dataset to reduce data
             transfer volume and the size of the output dataset. Default to True.
-        batch_size (int): Large batch sizes are likely to saturate the compute resources
+        batch_size: Large batch sizes are likely to saturate the compute resources
             and could achieve higher throughput. On the other hand, small batch sizes
             are more fault-tolerant and could reduce bubbles in the data pipeline.
             You can tune the batch size to balance the throughput and fault-tolerance
@@ -32,15 +32,15 @@ class Processor(_Processor):
     paradigm for processing data using LLMs.
 
     Args:
-        config (ProcessorConfig): The processor config.
-        preprocess (Callable[[Dict[str, Any]], Dict[str, Any]]): A lambda function that
-            takes a row (dict) as input and returns a preprocessed row (dict). The output
-            row must contain the required fields for the following processing stages.
-        postprocess (Callable[[Dict[str, Any]], Dict[str, Any]]): A lambda function that
-            takes a row (dict) as input and returns a postprocessed row (dict).
-        accelerator_type (Optional[str]): The accelerator type. Default to None, meaning
-            that only the CPU will be used.
-        concurrency (int): The number of workers for data parallelism.
+        config: The processor config.
+        preprocess: A lambda function that takes a row (dict) as input and returns a
+            preprocessed row (dict). The output row must contain the required fields
+            for the following processing stages.
+        postprocess: A lambda function that takes a row (dict) as input and returns a
+            postprocessed row (dict).
+        accelerator_type: The accelerator type. Default to None, meaning that only
+            the CPU will be used.
+        concurrency: The number of workers for data parallelism.
 
     Attributes:
         input_column: The internal used input column name (__inputs). Your input
@@ -59,7 +59,7 @@ def build_llm_processor(config: ProcessorConfig, **kwargs) -> Processor:
     """Build a LLM processor using the given config.
 
     Args:
-        config (ProcessorConfig): The processor config.
+        config: The processor config.
         **kwargs: Additional keyword arguments to pass to the processor.
             See `Processor` for argument details.
 
@@ -108,11 +108,11 @@ class HttpRequestProcessorConfig(_HttpRequestProcessorConfig):
                 print(row)
 
     Args:
-        url (str): The base URL to send the request to.
-        headers (Dict[str, str]): The headers to send with the request. Note that the
+        url: The base URL to send the request to.
+        headers: The headers to send with the request. Note that the
             default headers ("Content-Type": "application/json") is always added, so
             you don't need to specify it here.
-        qps (int): The maximum number of requests per second to avoid rate limit.
+        qps: The maximum number of requests per second to avoid rate limit.
             If None, the request will be sent sequentially.
     """
 
