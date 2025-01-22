@@ -34,8 +34,8 @@ class Processor:
 
     Args:
         config: The processor config.
-        preprocess_fn: Preprocess inputs to fit the processor inputs.
-        postprocess_fn: Postprocess outputs from the processor.
+        preprocess: Preprocess inputs to fit the processor inputs.
+        postprocess: Postprocess outputs from the processor.
         accelerator_type: The accelerator type.
         concurrency: The number of concurrent requests.
     """
@@ -114,10 +114,12 @@ class Processor:
         return dataset
 
     def append_stage(self, stage: StatefulStage):
-        """Append a stage before postprocess.
+        """Append a stage before postprocess. The stage class name will be used as
+        the stage name. If there are multiple stages with the same type, a suffix
+        will be added to the stage name to avoid conflicts.
 
         Args:
-            stage: The stage to append.
+            stage (StatefulStage): The stage to append.
         """
         stage_name = type(stage).__name__
 
@@ -131,7 +133,8 @@ class Processor:
         self.stages[stage_name] = stage
 
     def list_stage_names(self) -> List[str]:
-        """List the stage names of this processor in order.
+        """List the stage names of this processor in order. Preprocess and postprocess
+        are not included.
 
         Returns:
             A list of stage names.
@@ -139,10 +142,11 @@ class Processor:
         return list(self.stages.keys())
 
     def get_stage_by_name(self, name: str) -> StatefulStage:
-        """Get a particular stage by its name.
+        """Get a particular stage by its name. If the stage is not found,
+        a ValueError will be raised.
 
         Args:
-            name: The stage name.
+            name (str): The stage name.
 
         Returns:
             The pipeline stage.
