@@ -126,7 +126,9 @@ class StatefulStageUDF:
         """
 
         # Use .pop() to first remove input column from the batch.
-        inputs = batch.pop(self.input_column).tolist()
+        inputs = batch.pop(self.input_column)
+        if hasattr(inputs, "tolist"):
+            inputs = inputs.tolist()
         input_keys = set(inputs[0].keys())
         batch_size = len(inputs)
 
