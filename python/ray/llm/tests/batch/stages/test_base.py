@@ -46,7 +46,9 @@ def test_wrap_postprocess():
 
 class TestStatefulStageUDF:
     class SimpleUDF(StatefulStageUDF):
-        async def udf(self, rows: list[Dict[str, Any]]) -> AsyncIterator[Dict[str, Any]]:
+        async def udf(
+            self, rows: list[Dict[str, Any]]
+        ) -> AsyncIterator[Dict[str, Any]]:
             for row in rows:
                 yield {"processed": row["value"] * 2}
 
