@@ -2,7 +2,6 @@ from ray.llm._internal.batch.processor import (
     ProcessorConfig as _ProcessorConfig,
     Processor as _Processor,
     HttpRequestProcessorConfig as _HttpRequestProcessorConfig,
-    vLLMEngineProcessorConfig as _vLLMEngineProcessorConfig,
 )
 from ray.util.annotations import PublicAPI
 
@@ -46,13 +45,6 @@ def build_llm_processor(config: ProcessorConfig, **kwargs) -> Processor:
 
 @PublicAPI(stability="alpha")
 class HttpRequestProcessorConfig(_HttpRequestProcessorConfig):
-    """TBA."""
-
-    pass
-
-
-@PublicAPI(stability="alpha")
-class vLLMEngineProcessorConfig(_vLLMEngineProcessorConfig):
     """TBA."""
 
     pass
