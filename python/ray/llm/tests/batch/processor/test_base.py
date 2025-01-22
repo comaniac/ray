@@ -3,8 +3,13 @@ from typing import Any, AsyncIterator, Dict, List
 import pytest
 
 import ray
-from ray.llm._internal.batch.processor.base import Processor, ProcessorConfig, ProcessorBuilder
+from ray.llm._internal.batch.processor.base import (
+    Processor,
+    ProcessorConfig,
+    ProcessorBuilder,
+)
 from ray.llm._internal.batch.stages.base import StatefulStage, StatefulStageUDF
+
 
 @pytest.mark.parametrize("carry_over", [True, False])
 def test_empty_processor(carry_over: bool):
@@ -46,7 +51,9 @@ def test_processor_with_stages(has_extra: bool):
             super().__init__(input_column, output_column, carry_over)
             self.factor = factor
 
-        async def udf(self, batch: List[Dict[str, Any]]) -> AsyncIterator[Dict[str, Any]]:
+        async def udf(
+            self, batch: List[Dict[str, Any]]
+        ) -> AsyncIterator[Dict[str, Any]]:
             for row in batch:
                 answer = row["val"] * self.factor
                 if "extra" in row:
@@ -99,10 +106,12 @@ def test_processor_with_stages(has_extra: bool):
         assert processor.get_stage_by_name(stage_name) == stage
 
     ds = ray.data.range(5)
-    ds = ds.map(lambda row: {
-        "id": row["id"],
-        **({"extra": 1} if has_extra else {}),
-    })
+    ds = ds.map(
+        lambda row: {
+            "id": row["id"],
+            **({"extra": 1} if has_extra else {}),
+        }
+    )
 
     ds = processor(ds).take_all()
     extra = 1 if has_extra else 0
@@ -121,7 +130,9 @@ def test_processor_with_stages(has_extra: bool):
 
 def test_builder():
     class DummyStatefulStageUDF(StatefulStageUDF):
-        async def udf(self, batch: List[Dict[str, Any]]) -> AsyncIterator[Dict[str, Any]]:
+        async def udf(
+            self, batch: List[Dict[str, Any]]
+        ) -> AsyncIterator[Dict[str, Any]]:
             for row in batch:
                 yield row
 
@@ -129,7 +140,6 @@ def test_builder():
         fn: StatefulStageUDF = DummyStatefulStageUDF
         fn_constructor_kwargs: Dict[str, Any] = {}
         map_batches_kwargs: Dict[str, Any] = {}
-
 
     class TestBuilderDummyProcessorConfig(ProcessorConfig):
         pass
@@ -149,7 +159,9 @@ def test_builder():
     processor = ProcessorBuilder.build(TestBuilderDummyProcessorConfig())
     assert isinstance(processor.config, TestBuilderDummyProcessorConfig)
     assert processor.list_stage_names() == ["DummyStage"]
-    assert processor.get_stage_by_name("DummyStage").map_batches_kwargs["concurrency"] == 1
+    assert (
+        processor.get_stage_by_name("DummyStage").map_batches_kwargs["concurrency"] == 1
+    )
 
     def overrider(name: str, stage: StatefulStage):
         if name.startswith("DummyStage"):
@@ -160,4 +172,6 @@ def test_builder():
         override_stage_config_fn=overrider,
     )
     assert processor.list_stage_names() == ["DummyStage"]
-    assert processor.get_stage_by_name("DummyStage").map_batches_kwargs["concurrency"] == 2
+    assert (
+        processor.get_stage_by_name("DummyStage").map_batches_kwargs["concurrency"] == 2
+    )
