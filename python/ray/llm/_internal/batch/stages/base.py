@@ -34,8 +34,11 @@ def wrap_preprocess(
         if carry_over:
             if input_column in row:
                 row.pop(input_column)
-            outputs.update(row)
-        return outputs
+
+            # In the case of column name conflict,
+            # we overwrite the input column with the output column.
+            row.update(outputs)
+        return row
 
     return _preprocess
 
@@ -68,7 +71,13 @@ def wrap_postprocess(
         inputs = row.pop(input_column)
         outputs = fn(inputs)
         if carry_over:
-            outputs.update(row)
+            # Join the columns produced by the last stage.
+            row.update(inputs)
+
+            # In the case of column name conflict,
+            # we overwrite the input column with the output column.
+            row.update(outputs)
+            outputs = row
         return outputs
 
     return _postprocess

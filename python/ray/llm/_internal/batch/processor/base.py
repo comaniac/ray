@@ -90,7 +90,7 @@ class Processor:
         if self.preprocess is not None:
             dataset = dataset.map(self.preprocess)
 
-        for idx, (stage_name, stage) in enumerate(self.stages.items()):
+        for stage in self.stages.values():
             # Prepare .map_batches() arguments.
             kwargs = stage.map_batches_kwargs.copy()
             kwargs["batch_size"] = self.config.batch_size
@@ -127,7 +127,7 @@ class Processor:
             num_same_type_stage = len(
                 [s for s in self.stages.values() if type(s) == type(stage)]
             )
-            stage_name = f"{stage_name}_{num_same_type_stage + 1}"
+            stage_name = f"{stage_name}_{num_same_type_stage}"
         self.stages[stage_name] = stage
 
     def list_stage_names(self) -> List[str]:
