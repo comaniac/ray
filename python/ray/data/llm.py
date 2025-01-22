@@ -9,6 +9,7 @@ from ray.util.annotations import PublicAPI
 @PublicAPI(stability="alpha")
 class ProcessorConfig(_ProcessorConfig):
     """The base processor configuration."""
+
     pass
 
 
@@ -18,6 +19,7 @@ class Processor(_Processor):
     processing stages, and finally a postprocess stage. We use processor as a
     paradigm for processing data using LLMs.
     """
+
     pass
 
 
@@ -90,4 +92,5 @@ class HttpRequestProcessorConfig(_HttpRequestProcessorConfig):
         qps: The maximum number of requests per second to avoid rate limit.
             If None, the request will be sent sequentially.
     """
+
     pass
