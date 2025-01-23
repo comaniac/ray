@@ -1,7 +1,7 @@
 from collections import OrderedDict
 from typing import Optional, List, Type, Callable, Dict
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ray.data.block import UserDefinedFunction
 from ray.data import Dataset
@@ -18,10 +18,21 @@ from ray.llm._internal.batch.stages import (
 class ProcessorConfig(BaseModel):
     """The processor configuration."""
 
-    # Whether to carry over input columns.
-    carry_over: bool = True
-    # Control the fault tolerance granularity.
-    batch_size: int = 64
+    carry_over: bool = Field(
+        default=True,
+        description="Whether to carry over input columns. You can set it to False "
+        "if you don't want input columns in the output dataset to reduce data "
+        "transfer volume and the size of the output dataset. Default to True.",
+    )
+
+    batch_size: int = Field(
+        default=64,
+        description="Large batch sizes are likely to saturate the compute resources "
+        "and could achieve higher throughput. On the other hand, small batch sizes "
+        "are more fault-tolerant and could reduce bubbles in the data pipeline. "
+        "You can tune the batch size to balance the throughput and fault-tolerance "
+        "based on your use case. Default to 64.",
+    )
 
     class Config:
         validate_assignment = True
@@ -41,7 +52,7 @@ class Processor:
     """
 
     # The reserved input/output column names. Usually we don't need to
-    # change this them, but if your dataset really needs to use these
+    # change this, but if your dataset really needs to use these
     # names and results in conflicts, you should inherit the processor
     # to customize them.
     input_column: str = "__inputs"
@@ -158,7 +169,7 @@ class Processor:
 class ProcessorBuilder:
     """Build a processor based on the configuration."""
 
-    _registry: Dict[Type[ProcessorConfig], Callable] = {}
+    _registry: Dict[str, Callable] = {}
 
     @classmethod
     def register(cls, config_type: Type[ProcessorConfig], builder: Callable):
