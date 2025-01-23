@@ -18,13 +18,6 @@ from ray.llm._internal.batch.stages import (
 class ProcessorConfig(BaseModel):
     """The processor configuration."""
 
-    carry_over: bool = Field(
-        default=True,
-        description="Whether to carry over input columns. You can set it to False "
-        "if you don't want input columns in the output dataset to reduce data "
-        "transfer volume and the size of the output dataset. Default to True.",
-    )
-
     batch_size: int = Field(
         default=64,
         description="Large batch sizes are likely to saturate the compute resources "
@@ -51,12 +44,11 @@ class Processor:
         concurrency: The number of concurrent requests.
     """
 
-    # The reserved input/output column names. Usually we don't need to
-    # change this, but if your dataset really needs to use these
-    # names and results in conflicts, you should inherit the processor
-    # to customize them.
-    input_column: str = "__inputs"
-    output_column: str = "__outputs"
+    # The reserved data column name. Usually we don't need to
+    # change this, but if your dataset really needs to use this
+    # name in your dataset and results in conflicts, you should
+    # inherit the processor and customize the data_column name.
+    data_column: str = "__data"
 
     def __init__(
         self,
@@ -76,15 +68,13 @@ class Processor:
         if preprocess is not None:
             self.preprocess = wrap_preprocess(
                 preprocess,
-                self.input_column,
-                self.config.carry_over,
+                self.data_column,
             )
 
         if postprocess is not None:
             self.postprocess = wrap_postprocess(
                 postprocess,
-                self.input_column,
-                self.config.carry_over,
+                self.data_column,
             )
 
     def __call__(self, dataset: Dataset) -> Dataset:
@@ -102,23 +92,15 @@ class Processor:
             dataset = dataset.map(self.preprocess)
 
         for stage in self.stages.values():
-            # Prepare .map_batches() arguments.
+            # We separate fn and fn_constructor_kwargs in Stage for better UX,
+            # so we need to combine them with other map_batches_kwargs together.
             kwargs = stage.map_batches_kwargs.copy()
             kwargs["batch_size"] = self.config.batch_size
             kwargs.update({"fn_constructor_kwargs": stage.fn_constructor_kwargs})
-            kwargs["fn_constructor_kwargs"].update(
-                dict(
-                    input_column=self.input_column,
-                    output_column=self.output_column,
-                    carry_over=self.config.carry_over,
-                )
-            )
+            kwargs["fn_constructor_kwargs"]["data_column"] = self.data_column
 
             # Apply the stage.
             dataset = dataset.map_batches(stage.fn, **kwargs)
-
-            # Rename the output column to the input column to chain the stages.
-            dataset = dataset.rename_columns({self.output_column: self.input_column})
 
         if self.postprocess is not None:
             dataset = dataset.map(self.postprocess)
@@ -138,7 +120,7 @@ class Processor:
         # append a index suffix to the stage name to avoid conflicts.
         if stage_name in self.stages:
             num_same_type_stage = len([s for s in self.stages.values() if s is stage])
-            stage_name = f"{stage_name}_{num_same_type_stage}"
+            stage_name = f"{stage_name}_{num_same_type_stage + 1}"
         self.stages[stage_name] = stage
 
     def list_stage_names(self) -> List[str]:

@@ -26,9 +26,7 @@ def mock_session():
 @pytest.mark.asyncio
 async def test_http_request_udf_basic():
     udf = HttpRequestUDF(
-        input_column="input",
-        output_column="output",
-        carry_over=True,
+        data_column="__data",
         url="http://test.com/api",
         additional_header={"Authorization": "Bearer 1234567890"},
         qps=None,
@@ -59,9 +57,7 @@ async def test_http_request_udf_basic():
 @pytest.mark.asyncio
 async def test_http_request_udf_with_qps():
     udf = HttpRequestUDF(
-        input_column="input",
-        output_column="output",
-        carry_over=True,
+        data_column="__data",
         url="http://test.com/api",
         qps=2,
     )
