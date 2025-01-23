@@ -11,16 +11,15 @@ from ray.llm._internal.batch.processor.base import (
 from ray.llm._internal.batch.stages.base import StatefulStage, StatefulStageUDF
 
 
-@pytest.mark.parametrize("carry_over", [True, False])
-def test_empty_processor(carry_over: bool):
+def test_empty_processor():
     """Test processor with only preprocess and postprocess."""
 
     processor = Processor(
-        config=ProcessorConfig(carry_over=carry_over),
-        # {id} -> {id, val}
+        config=ProcessorConfig(),
+        # {id} -> {__data: {id, val}}
         preprocess=lambda row: {"val": row["id"] + 5},
-        # {id, val} -> {id, result}
-        postprocess=lambda row: {"result": row["val"]},
+        # {__data: {id, val}} -> {id, result}
+        postprocess=lambda row: {"result": row["val"], "id": row["id"]},
         accelerator_type=None,
         concurrency=1,
     )
@@ -29,11 +28,8 @@ def test_empty_processor(carry_over: bool):
     ds = processor(ds).take_all()
     for row in ds:
         assert "val" not in row
-        if carry_over:
-            assert "id" in row
-            assert row["result"] == row["id"] + 5
-        else:
-            assert "result" in row
+        assert "id" in row
+        assert "result" in row
 
 
 @pytest.mark.parametrize("has_extra", [True, False])
@@ -43,12 +39,10 @@ def test_processor_with_stages(has_extra: bool):
     class DummyStatefulStageUDF(StatefulStageUDF):
         def __init__(
             self,
-            input_column: str,
-            output_column: str,
-            carry_over: bool,
+            data_column: str,
             factor: int,
         ):
-            super().__init__(input_column, output_column, carry_over)
+            super().__init__(data_column)
             self.factor = factor
 
         async def udf(
@@ -56,21 +50,16 @@ def test_processor_with_stages(has_extra: bool):
         ) -> AsyncIterator[Dict[str, Any]]:
             for row in batch:
                 answer = row["val"] * self.factor
-                if "extra" in row:
+                if "extra" in row:  # Optional input column.
                     answer += row["extra"]
                 yield {
                     # Use the same name to chain multiple dummy stages.
                     "val": answer,
-                    # "extra" has to be carried over manually.
-                    **({"extra": row["extra"]} if "extra" in row else {}),
                 }
 
         @property
-        def expected_input_keys(self) -> Dict[str, StatefulStageUDF.InputKeyType]:
-            return {
-                "val": StatefulStageUDF.InputKeyType.REQUIRED,
-                "extra": StatefulStageUDF.InputKeyType.OPTIONAL,
-            }
+        def expected_input_keys(self) -> List[str]:
+            return ["val"]
 
     class DummyStage(StatefulStage):
         fn: StatefulStageUDF = DummyStatefulStageUDF
@@ -80,7 +69,7 @@ def test_processor_with_stages(has_extra: bool):
     processor = Processor(
         config=ProcessorConfig(carry_over=True),
         preprocess=lambda row: {"val": row["id"]},
-        postprocess=lambda row: {"result": row["val"]},
+        postprocess=lambda row: {"result": row["val"], "id": row["id"]},
         accelerator_type=None,
         concurrency=1,
     )
@@ -116,13 +105,8 @@ def test_processor_with_stages(has_extra: bool):
     ds = processor(ds).take_all()
     extra = 1 if has_extra else 0
     for row in ds:
-        # Carry over columns.
         assert "id" in row
-
-        # Stage output columns.
-        assert "val" in row
-        if has_extra:
-            assert "extra" in row
+        assert "result" in row
 
         # The final output should be the result of the last stage.
         assert row["result"] == (row["id"] * 2 + extra) * 3 + extra

@@ -1,7 +1,6 @@
 """TBA"""
 import logging
-from enum import Enum, auto
-from typing import Any, Dict, AsyncIterator, List, Callable, Tuple
+from typing import Any, Dict, AsyncIterator, List, Callable
 
 import pyarrow
 from pydantic import BaseModel, Field
@@ -12,183 +11,142 @@ logger = logging.getLogger(__name__)
 
 def wrap_preprocess(
     fn: UserDefinedFunction,
-    input_column: str,
-    carry_over: bool,
+    processor_data_column: str,
 ) -> Callable:
     """Wrap the preprocess function, so that the output schema of the
-    preprocess is normalized to {input_column: ...} (with other input columns
-    if carry_over is True).
+    preprocess is normalized to {processor_data_column: fn(row), other input columns}.
 
     Args:
         fn: The function to be applied.
-        input_column: The input column name.
-        carry_over: Whether to carry over the output column to the next stage.
+        processor_data_column: The internal data column name of the processor.
 
     Returns:
         The wrapped function.
     """
 
     def _preprocess(row: dict[str, Any]) -> dict[str, Any]:
-        outputs = {input_column: fn(row)}
+        # First put everything into processor_data_column.
+        outputs = {processor_data_column: row}
 
-        if carry_over:
-            if input_column in row:
-                row.pop(input_column)
-
-            # In the case of column name conflict,
-            # we overwrite the input column with the output column.
-            row.update(outputs)
-        return row
+        # Then apply the preprocess function and add its outputs.
+        preprocess_output = fn(row)
+        outputs[processor_data_column].update(preprocess_output)
+        return outputs
 
     return _preprocess
 
 
 def wrap_postprocess(
     fn: UserDefinedFunction,
-    input_column: str,
-    carry_over: bool,
+    processor_data_column: str,
 ) -> Callable:
-    """Wrap the postprocess function, so that the output schema of the
-    postprocess is the columns of the last stage plus carry over columns.
+    """Wrap the postprocess function to remove the processor_data_column.
+    Note that we fuly rely on users to determine which columns to carry over.
 
     Args:
         fn: The function to be applied.
-        input_column: The input column name.
-        carry_over: Whether to carry over the output column to the next stage.
+        processor_data_column: The internal data column name of the processor.
 
     Returns:
         The wrapped function.
     """
 
     def _postprocess(row: dict[str, Any]) -> dict[str, Any]:
-        """Extract the input column and apply the function, and wrap
-        the outputs with the output column name.
-        """
-        if input_column not in row:
-            raise ValueError(f"Input column {input_column} not found in row {row}")
+        if processor_data_column not in row:
+            raise ValueError(
+                f"[Internal] {processor_data_column} not found in row {row}"
+            )
 
-        # Use .pop() to avoid carrying over the input column.
-        inputs = row.pop(input_column)
-        outputs = fn(inputs)
-        if carry_over:
-            # Join the columns produced by the last stage.
-            row.update(inputs)
-
-            # In the case of column name conflict,
-            # we overwrite the input column with the output column.
-            row.update(outputs)
-            outputs = row
-        return outputs
+        return fn(row[processor_data_column])
 
     return _postprocess
 
 
 class StatefulStageUDF:
-    class InputKeyType(Enum):
-        REQUIRED = auto()
-        OPTIONAL = auto()
-
-    def __init__(
-        self,
-        input_column: str,
-        output_column: str,
-        carry_over: bool,
-    ):
-        self.input_column = input_column
-        self.output_column = output_column
-        self.carry_over = carry_over
+    def __init__(self, data_column: str):
+        self.data_column = data_column
 
     async def __call__(self, batch: Dict[str, Any]) -> AsyncIterator[Dict[str, Any]]:
-        # Handle the case where all rows are checkpointed or the batch is empty.
-        # When all rows are checkpointed, we will still get a batch in pyarrow.Table
-        # format with empty rows. This is a bug and is being tracked here:
-        # https://github.com/anyscale/rayturbo/issues/1292
+        """A stage UDF wrapper that processes the input and output columns
+        before and after the UDF. The expected schema of "batch" is:
+        {data_column: {
+            dataset columns,
+            other intermediate columns
+         },
+         ...other metadata columns...,
+        }.
+
+        The input of the UDF will then [dataset columns and other intermediate columns].
+        In addition, while the output of the UDF depends on the UDF implementation,
+        the output schema is expected to be
+        {data_column: {
+            dataset columns,
+            other intermediate columns,
+            UDF output columns (will override above columns if they have the same name)
+         },
+         ...other metadata columns...,
+        }.
+        And this will become the input of the next stage.
+
+        Args:
+            batch: The input batch.
+
+        Returns:
+            An async iterator of the outputs.
+        """
+        # Handle the case where the batch is empty.
+        # FIXME: This should not happen.
         if isinstance(batch, pyarrow.lib.Table) and batch.num_rows > 0:
             yield {}
             return
 
-        if self.input_column not in batch:
+        if self.data_column not in batch:
             raise ValueError(
-                f"Input column {self.input_column} not found in batch {batch}"
+                f"[Internal] {self.data_column} not found in batch {batch}"
             )
 
-        inputs, rows_wo_inputs = self.make_input_rows(batch)
+        inputs = batch.pop(self.data_column)
+        if hasattr(inputs, "tolist"):
+            inputs = inputs.tolist()
+        self.validate_inputs(inputs)
 
         idx = 0
         async for output in self.udf(inputs):
-            yield {
-                self.output_column: [output],
-                **{k: [v] for k, v in rows_wo_inputs[idx].items()},
-            }
+            # Add stage outputs to the data column of the row.
+            inputs[idx].update(output)
+            yield {self.data_column: [inputs[idx]]}
             idx += 1
 
-    def make_input_rows(
-        self, batch: Dict[str, Any]
-    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-        """Make the input rows and the rows without the input column.
+    def validate_inputs(self, inputs: List[Dict[str, Any]]):
+        """Validate the inputs to make sure the required keys are present.
 
         Args:
-            batch: The batch.
+            inputs: The inputs.
 
-        Returns:
-            A tuple of (inputs, rows_wo_inputs).
+        Raises:
+            ValueError: If the required keys are not found.
         """
-
-        # Use .pop() to first remove input column from the batch.
-        inputs = batch.pop(self.input_column)
-        if hasattr(inputs, "tolist"):
-            inputs = inputs.tolist()
-        input_keys = set(inputs[0].keys())
-        batch_size = len(inputs)
-
-        # Transpose the rest fields of the batch to be row-major.
-        other_keys = list(batch.keys())
-        rows_wo_inputs = [dict(zip(other_keys, v)) for v in zip(*batch.values())]
-
-        # Expected input keys may come from all_inputs or rows_wo_inputs.
         expected_input_keys = self.expected_input_keys
-        if expected_input_keys:
-            # Validate required keys exist.
-            required_keys = {
-                k
-                for k, v in expected_input_keys.items()
-                if v == self.InputKeyType.REQUIRED
-            }
-            missing_required = required_keys - input_keys
-            if missing_required:
-                raise ValueError(
-                    f"Required input keys {missing_required} not found in batch {batch}"
-                )
+        if not expected_input_keys:
+            return
 
-            move_from_input_to_other = input_keys - expected_input_keys.keys()
-            move_from_other_to_input = set(other_keys) & expected_input_keys.keys()
-            for inp, other in zip(inputs, rows_wo_inputs):
-                for key in move_from_other_to_input:
-                    # Do not override input if the column name is conflicted.
-                    inp.setdefault(key, other.pop(key))
-
-            # Remove all other keys if carry_over is False.
-            if not self.carry_over:
-                rows_wo_inputs = [{} for _ in range(batch_size)]
-
-            # Not expected input keys will be carried over regardless carry_over
-            # is True or False, because these keys are generated by previous stages
-            # and may be used by future stages.
-            for other, inp in zip(rows_wo_inputs, inputs):
-                for key in move_from_input_to_other:
-                    other[key] = inp.pop(key)
-
-        return inputs, rows_wo_inputs
+        input_keys = set(inputs[0].keys())
+        missing_required = set(expected_input_keys) - input_keys
+        if missing_required:
+            raise ValueError(
+                f"Required input keys {missing_required} not found at the input of "
+                f"{self.__class__.__name__}. Input keys: {input_keys}"
+            )
 
     @property
-    def expected_input_keys(self) -> Dict[str, InputKeyType]:
-        """The expected input keys. If empty, all keys in the input column
-        will be used.
+    def expected_input_keys(self) -> List[str]:
+        """A list of required input keys. Missing required keys will raise
+        an exception.
 
         Returns:
-            A dictionary with the expected input keys and their type.
+            A list of required input keys.
         """
-        return {}
+        return []
 
     async def udf(self, rows: List[Dict[str, Any]]) -> AsyncIterator[Dict[str, Any]]:
         raise NotImplementedError("StageUDF must implement the udf method")

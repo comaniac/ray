@@ -1,5 +1,5 @@
 import pytest
-from typing import Dict, Any, AsyncIterator
+from typing import List, Any, AsyncIterator, Dict
 from ray.llm._internal.batch.stages.base import (
     wrap_preprocess,
     wrap_postprocess,
@@ -10,34 +10,27 @@ from ray.llm._internal.batch.stages.base import (
 
 def test_wrap_preprocess():
     # Test function that doubles a number
-    def double(x: dict) -> int:
-        return x["value"] * 2
-
-    # Test with carry_over=False
-    wrapped = wrap_preprocess(double, "input", carry_over=False)
-    result = wrapped({"value": 5, "extra": "data"})
-    assert result == {"input": 10}
+    def double(x: dict) -> dict:
+        return {"value": x["id"] * 2}
 
     # Test with carry_over=True
-    wrapped = wrap_preprocess(double, "input", carry_over=True)
-    result = wrapped({"value": 5, "extra": "data"})
-    assert result == {"input": 10, "extra": "data", "value": 5}
+    wrapped = wrap_preprocess(double, "__data")
+    result = wrapped({"id": 5, "extra": "memo"})
+    assert result == {"__data": {"id": 5, "extra": "memo", "value": 10}}
 
 
 def test_wrap_postprocess():
     # Test function that converts number to string
-    def to_string(x: int) -> dict:
-        return {"result": str(x)}
-
-    # Test with carry_over=False
-    wrapped = wrap_postprocess(to_string, "input", carry_over=False)
-    result = wrapped({"input": 42, "extra": "data"})
-    assert result == {"result": "42"}
+    def to_string(x: dict) -> dict:
+        return {
+            "result": str(x["value"]),
+            "extra": x["extra"],
+        }
 
     # Test with carry_over=True
-    wrapped = wrap_postprocess(to_string, "input", carry_over=True)
-    result = wrapped({"input": 42, "extra": "data"})
-    assert result == {"result": "42", "extra": "data"}
+    wrapped = wrap_postprocess(to_string, "__data")
+    result = wrapped({"__data": {"id": 5, "extra": "memo", "value": 10}})
+    assert result == {"extra": "memo", "result": "10"}
 
     # Test missing input column
     with pytest.raises(ValueError):
@@ -53,20 +46,15 @@ class TestStatefulStageUDF:
                 yield {"processed": row["value"] * 2}
 
         @property
-        def expected_input_keys(self) -> Dict[str, StatefulStageUDF.InputKeyType]:
-            return {"value": StatefulStageUDF.InputKeyType.REQUIRED}
+        def expected_input_keys(self) -> List[str]:
+            return ["value"]
 
     @pytest.mark.asyncio
     async def test_basic_processing(self):
-        udf = self.SimpleUDF(
-            input_column="input_col",
-            output_column="output_col",
-            carry_over=True,
-        )
+        udf = self.SimpleUDF(data_column="__data")
 
         batch = {
-            "input_col": [{"value": 1}, {"value": 2}],
-            "extra": ["a", "b"],
+            "__data": [{"value": 1, "extra": "a"}, {"value": 2, "extra": "b"}],
         }
 
         results = []
@@ -75,26 +63,17 @@ class TestStatefulStageUDF:
 
         assert len(results) == 2
         assert results[0] == {
-            "output_col": [{"processed": 2}],
-            "extra": ["a"],
+            "__data": {"processed": 2, "value": 1, "extra": "a"},
         }
         assert results[1] == {
-            "output_col": [{"processed": 4}],
-            "extra": ["b"],
+            "__data": {"processed": 4, "value": 2, "extra": "b"},
         }
 
     @pytest.mark.asyncio
-    async def test_missing_input_column(self):
-        udf = self.SimpleUDF(
-            input_column="wrong_col",
-            output_column="output_col",
-            carry_over=True,
-        )
+    async def test_missing_data_column(self):
+        udf = self.SimpleUDF(data_column="__data")
 
-        batch = {
-            "input_col": [{"value": 1}],
-            "extra": ["a"],
-        }
+        batch = {"extra": ["a"]}
 
         with pytest.raises(ValueError):
             async for _ in udf(batch):
@@ -102,16 +81,9 @@ class TestStatefulStageUDF:
 
     @pytest.mark.asyncio
     async def test_missing_required_key(self):
-        udf = self.SimpleUDF(
-            input_column="input_col",
-            output_column="output_col",
-            carry_over=True,
-        )
+        udf = self.SimpleUDF(data_column="__data")
 
-        batch = {
-            "input_col": [{"wrong_key": 1}],
-            "extra": ["a"],
-        }
+        batch = {"__data": [{"wrong_key": 1}]}
 
         with pytest.raises(ValueError):
             async for _ in udf(batch):
@@ -119,18 +91,14 @@ class TestStatefulStageUDF:
 
 
 def test_stateful_stage():
-    udf = TestStatefulStageUDF.SimpleUDF(
-        input_column="input",
-        output_column="output",
-        carry_over=True,
-    )
+    udf = TestStatefulStageUDF.SimpleUDF(data_column="__data")
 
     stage = StatefulStage(
         fn=udf,
-        fn_constructor_kwargs={"input_column": "input"},
+        fn_constructor_kwargs={"data_column": "__data"},
         map_batches_kwargs={"batch_size": 10},
     )
 
     assert stage.fn == udf
-    assert stage.fn_constructor_kwargs == {"input_column": "input"}
+    assert stage.fn_constructor_kwargs == {"data_column": "__data"}
     assert stage.map_batches_kwargs == {"batch_size": 10}
