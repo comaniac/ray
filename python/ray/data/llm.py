@@ -43,10 +43,10 @@ class Processor(_Processor):
         concurrency: The number of workers for data parallelism.
 
     Attributes:
-        input_column: The internal used input column name (__inputs). Your input
-            dataset should not contain this column. If you want to use this column
-            in your input dataset, you have to derive and customize Processor.
-        output_column: The internal used output column name (__outputs). Your input
+        input_column: The internal used input column name ("__inputs"). Your input
+                    dataset should not contain this column. If you want to use this column
+                    in your input dataset, you have to derive and customize Processor.
+        output_column: The internal used output column name ("__outputs"). Your input
             dataset should not contain this column. If you want to use this column
             in your input dataset, you have to derive and customize Processor.
     """

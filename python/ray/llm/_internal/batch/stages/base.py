@@ -4,7 +4,7 @@ from enum import Enum, auto
 from typing import Any, Dict, AsyncIterator, List, Callable, Tuple
 
 import pyarrow
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from ray.data.block import UserDefinedFunction
 
 logger = logging.getLogger(__name__)
@@ -199,12 +199,15 @@ class StatefulStage(BaseModel):
     A basic building block to compose a Processor.
     """
 
-    # A well-optimized stateful UDF for this stage.
-    fn: StatefulStageUDF
-    # The keyword arguments of the UDF constructor.
-    fn_constructor_kwargs: Dict[str, Any]
-    # The arguments of .map_batches().
-    map_batches_kwargs: Dict[str, Any]
+    fn: StatefulStageUDF = Field(
+        description="The well-optimized stateful UDF for this stage."
+    )
+    fn_constructor_kwargs: Dict[str, Any] = Field(
+        description="The keyword arguments of the UDF constructor."
+    )
+    map_batches_kwargs: Dict[str, Any] = Field(
+        description="The arguments of .map_batches()."
+    )
 
     class Config:
         arbitrary_types_allowed = True
