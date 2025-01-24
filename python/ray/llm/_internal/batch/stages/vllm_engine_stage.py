@@ -57,6 +57,7 @@ class vLLMEngineWrapper:
         **kwargs,
     ):
         self.request_id = 0
+        self.task_type = kwargs.get("task", "generate")
 
         # Setup os.environ before importing vLLM to make sure the environment
         # variables are effective
@@ -65,6 +66,12 @@ class vLLMEngineWrapper:
 
         # Lazy import vLLM here.
         self.vllm = importlib.import_module("vllm")
+
+        # Construct PoolerConfig if override_pooler_config is specified.
+        if self.task_type == "embed" and "override_pooler_config" in kwargs:
+            kwargs["override_pooler_config"] = self.vllm.config.PoolerConfig(
+                **kwargs["override_pooler_config"]
+            )
 
         # Initialize the vLLM engine.
         engine_args = self.vllm.AsyncEngineArgs(
@@ -118,15 +125,12 @@ class vLLMEngineWrapper:
         else:
             image = []
 
-        # If sampling_params is provided in the batch, override the default.
-        if "sampling_params" in row:
+        if self.task_type == "generate":
             params = self.vllm.SamplingParams(**row.pop("sampling_params"))
-        elif "pooling_params" in row:
-            params = self.vllm.PoolingParams(**row.pop("pooling_params"))
+        elif self.task_type == "embed":
+            params = self.vllm.PoolingParams()
         else:
-            raise ValueError(
-                "Either sampling_params or pooling_params must be provided"
-            )
+            raise ValueError("Unsupported task type: %s", self.task_type)
 
         request = self.LLMRequest(
             request_id=self.request_id,
@@ -155,7 +159,7 @@ class vLLMEngineWrapper:
         if isinstance(output, self.vllm.outputs.RequestOutput):
             metrics = {}
             if output.metrics is not None:
-                metrics = {k: v for k, v in dataclasses.asdict(output.metrics).items()}
+                metrics = dict(dataclasses.asdict(output.metrics))
             output_data.update(
                 {
                     "generated_tokens": output.outputs[0].token_ids,
@@ -304,6 +308,7 @@ class vLLMEngineStageUDF(StatefulStageUDF):
         self.runtime_env = runtime_env or {}
 
         # Setup vLLM engine kwargs.
+        self.task_type = task_type
         self.engine_kwargs = self.normalize_engine_kwargs(task_type, engine_kwargs)
 
         # Set up the max pending requests.
@@ -347,7 +352,7 @@ class vLLMEngineStageUDF(StatefulStageUDF):
             )
 
         # Override the task if it is different from the stage.
-        task = engine_kwargs.get("task", "generate")
+        task = engine_kwargs.get("task", task_type)
         if task != task_type:
             logger.warning(
                 "The task set in engine kwargs (%s) is different from the "
@@ -356,7 +361,7 @@ class vLLMEngineStageUDF(StatefulStageUDF):
                 task_type,
                 task_type,
             )
-            engine_kwargs["task"] = task_type
+        engine_kwargs["task"] = task_type
 
         # Override vLLM default configs. Note that this is only effective
         # when the config is not set by users.
@@ -420,7 +425,10 @@ class vLLMEngineStageUDF(StatefulStageUDF):
     @property
     def expected_input_keys(self) -> List[str]:
         """The expected input keys."""
-        return ["prompt"]
+        ret = ["prompt"]
+        if self.task_type == "generate":
+            ret.append("sampling_params")
+        return ret
 
     def __del__(self):
         self.llm.shutdown()
