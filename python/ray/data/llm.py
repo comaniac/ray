@@ -15,7 +15,7 @@ class ProcessorConfig(_ProcessorConfig):
             and could achieve higher throughput. On the other hand, small batch sizes
             are more fault-tolerant and could reduce bubbles in the data pipeline.
             You can tune the batch size to balance the throughput and fault-tolerance
-            based on your use case. Default to 64.
+            based on your use case.
     """
 
     pass
