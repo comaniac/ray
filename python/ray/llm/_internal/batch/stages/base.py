@@ -224,15 +224,15 @@ class StatefulStage(BaseModel):
             The dataset map_batches kwargs.
         """
         kwargs = self.map_batches_kwargs.copy()
-        batch_size = kwargs.get("batch_size", batch_size)
-        if batch_size != batch_size:
+        batch_size_in_kwargs = kwargs.get("batch_size", batch_size)
+        if batch_size_in_kwargs != batch_size:
             logger.warning(
                 "batch_size is set to %d in map_batches_kwargs, but it will be "
                 "overridden by the batch size configured by the processor %d.",
+                batch_size_in_kwargs,
                 batch_size,
-                self.config.batch_size,
             )
-            kwargs["batch_size"] = self.config.batch_size
+        kwargs["batch_size"] = batch_size
 
         kwargs.update({"fn_constructor_kwargs": self.fn_constructor_kwargs})
         if "data_column" in kwargs["fn_constructor_kwargs"]:
