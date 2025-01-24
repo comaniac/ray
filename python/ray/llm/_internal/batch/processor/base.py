@@ -111,7 +111,7 @@ class Processor:
             dataset = dataset.map(self.postprocess)
         return dataset
 
-    def append_stage(self, stage: StatefulStage):
+    def append_stage(self, stage: StatefulStage) -> None:
         """Append a stage before postprocess. The stage class name will be used as
         the stage name. If there are multiple stages with the same type, a suffix
         will be added to the stage name to avoid conflicts.
@@ -159,7 +159,7 @@ class ProcessorBuilder:
     _registry: Dict[str, Callable] = {}
 
     @classmethod
-    def register(cls, config_type: Type[ProcessorConfig], builder: Callable):
+    def register(cls, config_type: Type[ProcessorConfig], builder: Callable) -> None:
         """A decorator to assoicate a particular pipeline config
         with its build function.
         """

@@ -88,6 +88,29 @@ class StatefulStageUDF:
         }.
         And this will become the input of the next stage.
 
+        Examples:
+            Input dataset columns: {A, B, C}
+            Preprocess: (lambda row: {"D": row["A"] + 1})
+                Input:
+                    UDF input: {A, B, C}
+                    UDF output: {D}
+                Output: {__data: {A, B, C, D}}
+            Stage 1:
+                Input: {__data: {A, B, C, D}}
+                    UDF input: {A, B, C, D}
+                    UDF output: {E}
+                Output: {__data: {A, B, C, D, E}}
+            Stage 2:
+                Input: {__data: {A, B, C, D, E}}
+                    UDF input: {A, B, C, D, E}
+                    UDF output: {F, E} # E is in-place updated.
+                Output: {__data: {A, B, C, D, E, F}}
+            Postprocess: (lambda row: {"G": row["F"], "A": row["A"], "E": row["E"]})
+                Input: {__data: {A, B, C, D, E, F}}
+                    UDF input: {A, B, C, D, E, F}
+                    UDF output: {G, A, E}
+                Output: {G, A, E} # User chooses to keep G, A, E.
+
         Args:
             batch: The input batch.
 
@@ -110,6 +133,14 @@ class StatefulStageUDF:
             inputs = inputs.tolist()
         self.validate_inputs(inputs)
 
+        # Always stream the outputs one by one to better overlapping
+        # batches. For example, when the output batch size is 64, Ray Data
+        # will collect 64 outputs, and 1) send the batch of 64 to the next stage,
+        # 2) get the next batch of this stage. Assuming the input batch size
+        # is 63 and we yield all 63 results at once, then Ray Data will wait
+        # for 2 batches (63 + 63 > 64) to continue proceeding. On the other hand,
+        # if we stream outputs one-by-one, Ray Data can form a batch of 64 before
+        # the second batch is done.
         idx = 0
         async for output in self.udf(inputs):
             # Add stage outputs to the data column of the row.
