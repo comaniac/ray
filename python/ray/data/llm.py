@@ -2,6 +2,7 @@ from ray.llm._internal.batch.processor import (
     ProcessorConfig as _ProcessorConfig,
     Processor as _Processor,
     HttpRequestProcessorConfig as _HttpRequestProcessorConfig,
+    vLLMEngineProcessorConfig as _vLLMEngineProcessorConfig,
 )
 from ray.util.annotations import PublicAPI
 
@@ -103,5 +104,12 @@ class HttpRequestProcessorConfig(_HttpRequestProcessorConfig):
         qps: The maximum number of requests per second to avoid rate limit.
             If None, the request will be sent sequentially.
     """
+
+    pass
+
+
+@PublicAPI(stability="alpha")
+class vLLMEngineProcessorConfig(_vLLMEngineProcessorConfig):
+    """TBA."""
 
     pass
