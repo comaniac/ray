@@ -11,15 +11,11 @@ class ProcessorConfig(_ProcessorConfig):
     """The base processor configuration.
 
     Args:
-        carry_over: Whether to carry over input columns. You can set it to False
-            if you don't want input columns in the output dataset to reduce data
-            transfer volume and the size of the output dataset. Default to True.
         batch_size: Large batch sizes are likely to saturate the compute resources
             and could achieve higher throughput. On the other hand, small batch sizes
             are more fault-tolerant and could reduce bubbles in the data pipeline.
             You can tune the batch size to balance the throughput and fault-tolerance
             based on your use case. Default to 64.
-
     """
 
     pass
@@ -43,10 +39,7 @@ class Processor(_Processor):
         concurrency: The number of workers for data parallelism.
 
     Attributes:
-        input_column: The internal used input column name ("__inputs"). Your input
-                    dataset should not contain this column. If you want to use this column
-                    in your input dataset, you have to derive and customize Processor.
-        output_column: The internal used output column name ("__outputs"). Your input
+        data_column: The internal used data column name ("__data"). Your input
             dataset should not contain this column. If you want to use this column
             in your input dataset, you have to derive and customize Processor.
     """
