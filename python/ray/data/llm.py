@@ -37,11 +37,6 @@ class Processor(_Processor):
         accelerator_type: The accelerator type. Default to None, meaning that only
             the CPU will be used.
         concurrency: The number of workers for data parallelism.
-
-    Attributes:
-        data_column: The internal used data column name ("__data"). Your input
-            dataset should not contain this column. If you want to use this column
-            in your input dataset, you have to derive and customize Processor.
     """
 
     pass
