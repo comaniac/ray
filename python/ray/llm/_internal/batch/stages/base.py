@@ -63,6 +63,16 @@ def wrap_postprocess(
 
 
 class StatefulStageUDF:
+    """A stage UDF wrapper that processes the input and output columns
+    before and after the UDF.
+
+    Args:
+        data_column: The internal data column name of the processor. The
+        __call__ method will take the data column as the input of the udf
+        method, and encapsulate the output of the udf method into the data
+        column for the next stage.
+    """
+
     def __init__(self, data_column: str):
         self.data_column = data_column
 
@@ -119,7 +129,7 @@ class StatefulStageUDF:
         """
         # Handle the case where the batch is empty.
         # FIXME: This should not happen.
-        if isinstance(batch, pyarrow.lib.Table) and batch.num_rows > 0:
+        if isinstance(batch, pyarrow.lib.Table) and batch.num_rows == 0:
             yield {}
             return
 
@@ -197,6 +207,41 @@ class StatefulStage(BaseModel):
     map_batches_kwargs: Dict[str, Any] = Field(
         description="The arguments of .map_batches()."
     )
+
+    def get_dataset_map_batches_kwargs(
+        self,
+        batch_size: int,
+        data_column: str,
+    ) -> Dict[str, Any]:
+        """We separate fn and fn_constructor_kwargs in Stage for better UX,
+        so we combine them with other map_batches_kwargs together in this method.
+
+        Args:
+            batch_size: The batch size set by the processor config.
+            data_column: The data column name set by the processor.
+
+        Returns:
+            The dataset map_batches kwargs.
+        """
+        kwargs = self.map_batches_kwargs.copy()
+        batch_size = kwargs.get("batch_size", batch_size)
+        if batch_size != batch_size:
+            logger.warning(
+                "batch_size is set to %d in map_batches_kwargs, but it will be "
+                "overridden by the batch size configured by the processor %d.",
+                batch_size,
+                self.config.batch_size,
+            )
+            kwargs["batch_size"] = self.config.batch_size
+
+        kwargs.update({"fn_constructor_kwargs": self.fn_constructor_kwargs})
+        if "data_column" in kwargs["fn_constructor_kwargs"]:
+            raise ValueError(
+                "'data_column' cannot be used as in fn_constructor_kwargs."
+            )
+
+        kwargs["fn_constructor_kwargs"]["data_column"] = data_column
+        return kwargs
 
     class Config:
         arbitrary_types_allowed = True

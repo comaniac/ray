@@ -96,15 +96,12 @@ class Processor:
         if self.preprocess is not None:
             dataset = dataset.map(self.preprocess)
 
+        # Apply stages.
         for stage in self.stages.values():
-            # We separate fn and fn_constructor_kwargs in Stage for better UX,
-            # so we need to combine them with other map_batches_kwargs together.
-            kwargs = stage.map_batches_kwargs.copy()
-            kwargs["batch_size"] = self.config.batch_size
-            kwargs.update({"fn_constructor_kwargs": stage.fn_constructor_kwargs})
-            kwargs["fn_constructor_kwargs"]["data_column"] = self.data_column
-
-            # Apply the stage.
+            kwargs = stage.get_dataset_map_batches_kwargs(
+                batch_size=self.config.batch_size,
+                data_column=self.data_column,
+            )
             dataset = dataset.map_batches(stage.fn, **kwargs)
 
         if self.postprocess is not None:
