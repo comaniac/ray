@@ -34,20 +34,25 @@ class ProcessorConfig(BaseModel):
 
 @DeveloperAPI
 class Processor:
-    """The processor.
+    """A processor is composed of a preprocess stage, followed by one or more
+    processing stages, and finally a postprocess stage. We use processor as a
+    paradigm for processing data using LLMs.
 
     Args:
         config: The processor config.
-        preprocess: Preprocess inputs to fit the processor inputs.
-        postprocess: Postprocess outputs from the processor.
-        accelerator_type: The accelerator type.
-        concurrency: The number of concurrent requests.
+        preprocess: A lambda function that takes a row (dict) as input and returns a
+            preprocessed row (dict). The output row must contain the required fields
+            for the following processing stages.
+        postprocess: A lambda function that takes a row (dict) as input and returns a
+            postprocessed row (dict).
+        accelerator_type: The accelerator type. Default to None, meaning that only
+            the CPU will be used.
+        concurrency: The number of workers for data parallelism.
     """
 
-    # The reserved data column name. Usually we don't need to
-    # change this, but if your dataset really needs to use this
-    # name in your dataset and results in conflicts, you should
-    # inherit the processor and customize the data_column name.
+    # The internal used data column name ("__data"). Your input
+    # dataset should not contain this column. If you want to use this column
+    # in your input dataset, you have to derive and customize Processor.
     data_column: str = "__data"
 
     def __init__(
